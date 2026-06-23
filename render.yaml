@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: medscan-pro
+    runtime: python
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "cd app && uvicorn main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: GROQ_KEY
+        sync: false
+      - key: TAVILY_API_KEY
+        sync: false
+      - key: MEDSCAN_MOCK_MODE
+        value: "false"
