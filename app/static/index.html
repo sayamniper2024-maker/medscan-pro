@@ -1,1 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MedScan Pro</title>
+<style>
+  body {
+    font-family: -apple-system, Helvetica, Arial, sans-serif;
+    max-width: 800px;
+    margin: 40px auto;
+    padding: 0 20px;
+    color: #1a1a1a;
+    line-height: 1.5;
+  }
+  h1 { font-size: 1.6em; margin-bottom: 0.2em; }
+  .subtitle { color: #666; margin-bottom: 2em; }
+  label { display: block; font-weight: 600; margin-top: 1.2em; margin-bottom: 0.3em; }
+  input, textarea {
+    width: 100%;
+    padding: 10px;
+    font-size: 1em;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-sizing: border-box;
+    font-family: inherit;
+  }
+  textarea { min-height: 80px; resize: vertical; }
+  button {
+    margin-top: 1.5em;
+    padding: 12px 24px;
+    font-size: 1em;
+    background: #2563eb;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:disabled { background: #93b4f0; cursor: not-allowed; }
+  #status-area { margin-top: 2em; }
+  #status-text { color: #444; font-style: italic; }
+  #report-output {
+    margin-top: 1.5em;
+    padding: 20px;
+    background: #f7f7f8;
+    border-radius: 8px;
+    white-space: pre-wrap;
+    font-family: -apple-system, Helvetica, Arial, sans-serif;
+    display: none;
+  }
+  #error-output {
+    margin-top: 1.5em;
+    padding: 15px;
+    background: #fef2f2;
+    color: #991b1b;
+    border-radius: 8px;
+    display: none;
+  }
+  .spinner {
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #ccc;
+    border-top-color: #2563eb;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin-right: 8px;
+    vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
 
+  <h1>MedScan Pro</h1>
+  <div class="subtitle">AI-powered market research for medical device concepts</div>
+
+  <form id="report-form">
+    <label for="device_concept">Device Concept</label>
+    <textarea id="device_concept" required placeholder="e.g. Robotic-assisted minimally invasive surgical platform adapted for non-obstetric procedures on pregnant patients"></textarea>
+
+    <label for="indication">Target Indication</label>
+    <textarea id="indication" required placeholder="e.g. Non-obstetric surgery in pregnant patients requiring minimally invasive intervention"></textarea>
+
+    <button type="submit" id="submit-button">Generate Report</button>
+  </form>
+
+  <div id="status-area">
+    <div id="status-text"></div>
+    <div id="error-output"></div>
+    <div id="report-output"></div>
+  </div>
+
+<script>
+  // Change this if your API is running somewhere other than localhost:8000
+  const API_BASE_URL = "http://localhost:8000";
+
+  const form = document.getElementById("report-form");
+  const submitButton = document.getElementById("submit-button");
+  const statusText = document.getElementById("status-text");
+  const reportOutput = document.getElementById("report-output");
+  const errorOutput = document.getElementById("error-output");
+
+  let pollTimer = null;
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    const deviceConcept = document.getElementById("device_concept").value;
+    const indication = document.getElementById("indication").value;
+
+    // Reset the UI for a fresh run
+    submitButton.disabled = true;
+    reportOutput.style.display = "none";
+    errorOutput.style.display = "none";
+    statusText.innerHTML = '<span class="spinner"></span>Starting your report...';
+
+    try {
+      // Step 1: start the job - this should return almost instantly
+      const startResponse = await fetch(`${API_BASE_URL}/generate-report`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          device_concept: deviceConcept,
+          indication: indication,
+        }),
+      });
+
+      if (!startResponse.ok) {
+        throw new Error(`Failed to start report: ${startResponse.status}`);
+      }
+
+      const startData = await startResponse.json();
+      const jobId = startData.job_id;
+
+      // Step 2: poll for status every 3 seconds until done or failed
+      pollTimer = setInterval(() => pollStatus(jobId), 3000);
+    } catch (err) {
+      showError(err.message);
+      submitButton.disabled = false;
+    }
+  });
+
+  async function pollStatus(jobId) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/report-status/${jobId}`);
+      const data = await response.json();
+
+      if (data.status === "pending" || data.status === "running") {
+        statusText.innerHTML = '<span class="spinner"></span>Generating your report... this can take a few minutes.';
+      } else if (data.status === "done") {
+        clearInterval(pollTimer);
+        statusText.innerHTML = "Report ready.";
+        reportOutput.textContent = data.report;
+        reportOutput.style.display = "block";
+        submitButton.disabled = false;
+      } else if (data.status === "failed") {
+        clearInterval(pollTimer);
+        showError(data.error || "Report generation failed.");
+        submitButton.disabled = false;
+      }
+    } catch (err) {
+      clearInterval(pollTimer);
+      showError(err.message);
+      submitButton.disabled = false;
+    }
+  }
+
+  function showError(message) {
+    statusText.textContent = "";
+    errorOutput.textContent = "Error: " + message;
+    errorOutput.style.display = "block";
+  }
+</script>
+
+</body>
+</html>
