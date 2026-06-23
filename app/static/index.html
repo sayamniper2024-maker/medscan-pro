@@ -92,7 +92,7 @@
 
 <script>
   // Change this if your API is running somewhere other than localhost:8000
-  const API_BASE_URL = "http://localhost:8000";
+  const API_BASE_URL = window.location.origin;
 
   const form = document.getElementById("report-form");
   const submitButton = document.getElementById("submit-button");
